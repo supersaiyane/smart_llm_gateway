@@ -1,0 +1,103 @@
+
+version: "3.9"
+
+services:
+
+  # -------------------------
+  # Core Services
+  # -------------------------
+
+  gateway:
+    build: ./gateway
+    container_name: smart-gateway
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+      - ollama1
+      - ollama2
+      - ollama3
+
+    environment:
+      REDIS_HOST: redis
+    restart: unless-stopped    
+
+  redis:
+    image: redis:7
+    container_name: smart-redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped  
+
+  nginx:
+    image: nginx:latest
+    container_name: smart-nginx
+    ports:
+      - "8080:80"
+    volumes:
+      - ./configs/nginx.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - gateway       
+
+  # -------------------------
+  # Ollama Services
+  # -------------------------
+
+  ollama1:
+    image: ollama/ollama
+    container_name: ollama1
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_ollama1_data:/root/.ollama
+    restart: unless-stopped
+
+  ollama2:
+    image: ollama/ollama
+    container_name: ollama2
+    ports:
+      - "11435:11434"
+    volumes:
+      - ollama_ollama2_data:/root/.ollama
+    restart: unless-stopped
+
+  ollama3:
+    image: ollama/ollama
+    container_name: ollama3
+    ports:
+      - "11436:11434"
+    volumes:
+      - ollama_ollama3_data:/root/.ollama
+    restart: unless-stopped
+
+
+  # -------------------------
+  # Controller (Self-Healing Brain)
+  # -------------------------
+  ollama-controller:
+    image: ollama/ollama
+    container_name: ollama-controller
+    depends_on:
+      - ollama1
+      - ollama2
+      - ollama3
+
+    volumes:
+      - ./init-scripts:/init-scripts
+      - /var/run/docker.sock:/var/run/docker.sock
+    entrypoint: >
+      sh -c "
+      apt-get update &&
+      apt-get install -y jq curl docker.io bc redis-tools &&
+      /bin/sh /init-scripts/ollama-controller.sh
+      "
+    environment:
+      MODEL_REPLICAS: '{"phi3:mini": 2, "llama3.2": 1}'
+      OLLAMA_NODES: 'ollama1,ollama2,ollama3'
+      STRICT_MODE: 'false'
+    restart: always    
+
+volumes:
+  ollama_ollama1_data:
+  ollama_ollama2_data:
+  ollama_ollama3_data:
