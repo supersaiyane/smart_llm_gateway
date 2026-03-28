@@ -1,0 +1,82 @@
+# =============================================================
+#  Smart LLM Gateway — Master Configuration
+#  This is the ONLY file you need to edit.
+#  Change replicas, weights, models — everything else is auto.
+# =============================================================
+
+gateway:
+  host: "0.0.0.0"
+  port: 8081
+  max_concurrent: 20        # max parallel requests in flight
+  request_timeout: 30       # seconds before a request times out
+  queue_size: 100           # max requests waiting in queue
+
+# -----------------------------------------------------------------
+# Models
+#   name     : Ollama model tag (must match what Ollama knows)
+#   replicas : number of Ollama containers to spin up for this model
+#   weight   : fraction of traffic routed to this model (must sum ~1.0)
+#   fallback : model to try if all replicas for this model fail
+# -----------------------------------------------------------------
+models:
+  - name: phi3:mini
+    replicas: 2
+    weight: 0.7
+    fallback: llama3.2
+
+  - name: llama3.2
+    replicas: 5
+    weight: 0.3
+
+# -----------------------------------------------------------------
+# Load Balancing
+#   algorithm options:
+#     round_robin       — simple turn-by-turn fairness
+#     least_connections — fewest active requests wins (best general)
+#     weighted_latency  — lower latency = higher priority
+#     adaptive          — combines latency + connections + failures
+# -----------------------------------------------------------------
+load_balancing:
+  algorithm: adaptive
+
+# -----------------------------------------------------------------
+# Circuit Breaker (per node)
+#   failure_threshold : failures before circuit opens
+#   timeout           : seconds before a half-open retry is allowed
+# -----------------------------------------------------------------
+circuit_breaker:
+  failure_threshold: 3
+  timeout: 30
+
+# -----------------------------------------------------------------
+# Self-Healing
+#   reconcile_interval  : how often (seconds) the healer runs
+#   auto_restart        : attempt to recover open-circuit nodes
+#   adaptive_weights    : auto-reduce weight for slow models
+#   weight_adjust_step  : how much to shift weight per cycle
+#   weight_min          : floor — never starve a model below this
+#   max_parallel_pulls  : concurrency limit for model pulls
+#   pull_retries        : attempts before giving up on a model pull
+# -----------------------------------------------------------------
+self_healing:
+  reconcile_interval: 20
+  auto_restart: true
+  adaptive_weights: true
+  weight_adjust_step: 0.05
+  weight_min: 0.05
+  max_parallel_pulls: 2
+  pull_retries: 5
+
+# -----------------------------------------------------------------
+# Monitoring
+# -----------------------------------------------------------------
+monitoring:
+  prometheus_enabled: true
+  health_check_interval: 10   # seconds between passive health probes
+
+# -----------------------------------------------------------------
+# Redis
+# -----------------------------------------------------------------
+redis:
+  host: redis
+  port: 6379

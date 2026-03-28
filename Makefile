@@ -1,113 +1,84 @@
-# -------------------------
-# Variables
-# -------------------------
-COMPOSE_FILE=docker-compose.generated.yml
+COMPOSE_FILE = docker-compose.yml
 
-# -------------------------
-# Generate Compose
-# -------------------------
+# ─────────────────────────────────────────────
+#  Core lifecycle
+# ─────────────────────────────────────────────
+
 generate:
-	@echo "🛠️ Generating docker-compose..."
-	python3 init-scripts/Production-Ready-generator.py
+	@echo "Generating docker-compose from config.yaml ..."
+	python3 init-scripts/generator.py
 
-# -------------------------
-# Start System
-# -------------------------
 up: generate
-	@echo "🚀 Starting system..."
+	@echo "Starting Smart LLM Gateway ..."
 	docker compose -f $(COMPOSE_FILE) up --build -d
+	@echo ""
+	@echo "  Gateway  → http://localhost:8080/generate"
+	@echo "  Status   → http://localhost:8081/status"
+	@echo "  Metrics  → http://localhost:8081/metrics"
+	@echo "  Nodes    → http://localhost:8081/nodes"
 
-# -------------------------
-# Stop System
-# -------------------------
 down:
-	@echo "🛑 Stopping system..."
-	docker compose -f $(COMPOSE_FILE) down -v
+	docker compose -f $(COMPOSE_FILE) down
 
-# -------------------------
-# Restart System
-# -------------------------
 restart: down up
 
-# -------------------------
-# Rebuild Clean
-# -------------------------
-rebuild: down generate up
+rebuild:
+	docker compose -f $(COMPOSE_FILE) down -v
+	python3 init-scripts/generator.py
+	docker compose -f $(COMPOSE_FILE) up --build -d
 
-# -------------------------
-# Clean (Hard Reset)
-# -------------------------
 clean:
-	@echo "🧹 Cleaning all containers, volumes..."
 	docker compose -f $(COMPOSE_FILE) down -v --remove-orphans
 	docker system prune -f
 
-# -------------------------
-# Show Generated Compose
-# -------------------------
-show: generate
-	@echo "📄 Generated docker-compose:"
-	@cat $(COMPOSE_FILE)
+# ─────────────────────────────────────────────
+#  Observability
+# ─────────────────────────────────────────────
 
-# -------------------------
-# Status
-# -------------------------
-ps:
-	docker compose -f $(COMPOSE_FILE) ps
+status:
+	@curl -s http://localhost:8081/status | python3 -m json.tool
 
-# -------------------------
-# Logs (All)
-# -------------------------
+nodes:
+	@curl -s http://localhost:8081/nodes | python3 -m json.tool
+
+health:
+	@curl -s http://localhost:8081/health
+
+reload:
+	@curl -s -X POST http://localhost:8081/config/reload | python3 -m json.tool
+
+# ─────────────────────────────────────────────
+#  Logs
+# ─────────────────────────────────────────────
+
 logs:
 	docker compose -f $(COMPOSE_FILE) logs -f
 
-# -------------------------
-# Logs (Controller)
-# -------------------------
-logs-controller:
-	docker compose -f $(COMPOSE_FILE) logs -f ollama-controller
-
-# -------------------------
-# Logs (Gateway)
-# -------------------------
 logs-gateway:
 	docker compose -f $(COMPOSE_FILE) logs -f gateway
 
-# -------------------------
-# Shell into Controller
-# -------------------------
-shell-controller:
-	docker exec -it ollama-controller sh
+logs-controller:
+	docker compose -f $(COMPOSE_FILE) logs -f controller
 
-# -------------------------
-# Check Config inside Controller
-# -------------------------
-check-config:
-	docker exec -it ollama-controller sh -c 'echo $$MODEL_REPLICAS'
+# ─────────────────────────────────────────────
+#  Testing
+# ─────────────────────────────────────────────
 
-# -------------------------
-# Check Models on Nodes
-# -------------------------
-models:
-	@echo "🧠 Checking models across nodes..."
-	docker exec -it ollama-controller sh /test-scripts/check_models.sh
+test:
+	python3 test-scripts/test_gateway.py
 
-# -------------------------
-# Test Load Balancing
-# -------------------------
 test-lb:
-	@echo "🚀 Testing load balancing..."
 	python3 test-scripts/test_load_balancing.py
 
-# -------------------------
-# Health Check (Quick)
-# -------------------------
-health:
-	@echo "🔍 Checking container health..."
+# ─────────────────────────────────────────────
+#  Misc
+# ─────────────────────────────────────────────
+
+ps:
 	docker compose -f $(COMPOSE_FILE) ps
 
-# -------------------------
-# Full Validation (Models + LB)
-# -------------------------
-validate: models test-lb
-	@echo "✅ Full validation completed"
+show: generate
+	@cat $(COMPOSE_FILE)
+
+.PHONY: generate up down restart rebuild clean status nodes health reload \
+        logs logs-gateway logs-controller test test-lb ps show
