@@ -62,13 +62,32 @@ logs-controller:
 
 # ─────────────────────────────────────────────
 #  Testing
+#
+#  Targets accept optional args via ARGS=:
+#    make test        ARGS="--requests 50 --concurrency 10"
+#    make test-lb     ARGS="--requests 40"
+#    make test-health ARGS="--url http://localhost:8081"
+#    make check-models ARGS="--nodes ollama1:11434,ollama2:11434"
 # ─────────────────────────────────────────────
 
-test:
-	python3 test-scripts/test_gateway.py
+# Quick smoke test — validates every endpoint
+test-health:
+	python3 test-scripts/test_health.py $(ARGS)
 
+# Concurrent load test — latency, throughput, server distribution
+test:
+	python3 test-scripts/test_gateway.py $(ARGS)
+
+# Distribution validator — confirms lb is spreading traffic
 test-lb:
-	python3 test-scripts/test_load_balancing.py
+	python3 test-scripts/test_load_balancing.py $(ARGS)
+
+# Model inspector — shows what each Ollama node has loaded
+check-models:
+	python3 test-scripts/check_models.py $(ARGS)
+
+# Run all tests in order: smoke → distribution → load
+test-all: test-health test-lb test
 
 # ─────────────────────────────────────────────
 #  Misc
@@ -81,4 +100,6 @@ show: generate
 	@cat $(COMPOSE_FILE)
 
 .PHONY: generate up down restart rebuild clean status nodes health reload \
-        logs logs-gateway logs-controller test test-lb ps show
+        logs logs-gateway logs-controller \
+        test test-lb test-health check-models test-all \
+        ps show
