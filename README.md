@@ -8,6 +8,7 @@ It handles load balancing, circuit breaking, self-healing, and adaptive traffic 
 ## Table of Contents
 
 - [For Beginners — Just Make It Work](#for-beginners--just-make-it-work)
+- [Docker Image — Plug and Play](#docker-image--plug-and-play)
 - [How It Works (Plain English)](#how-it-works-plain-english)
 - [Configuration Reference](#configuration-reference)
 - [API Reference](#api-reference)
@@ -113,6 +114,154 @@ make nodes     # per-node details
 | `make reload` | Reload config.yaml without restart |
 | `make test-lb` | Run load balancing test |
 | `make clean` | Full reset — removes volumes |
+
+---
+
+## Docker Image — Plug and Play
+
+Drop the gateway into any project without cloning this repo.
+You only need Docker and a running Redis instance. Ollama nodes must already be up and have the models pulled.
+
+---
+
+### Build the image
+
+```bash
+git clone https://github.com/supersaiyane/smart_llm_gateway.git
+cd smart_llm_gateway
+docker build -t smart-llm-gateway .
+```
+
+---
+
+### Option 1 — Mount your own config.yaml
+
+Full control. Copy the default config, edit it, and mount it in:
+
+```bash
+cp config.yaml my-config.yaml
+# edit my-config.yaml: set model names, replicas, weights, redis host
+
+docker run -d \
+  -v ./my-config.yaml:/app/config.yaml \
+  -p 8081:8081 \
+  --name gateway \
+  smart-llm-gateway
+```
+
+---
+
+### Option 2 — Configure entirely with environment variables
+
+No file to manage. Pass everything as flags:
+
+```bash
+docker run -d \
+  -e GATEWAY_MODELS="phi3:mini|2|0.7|llama3.2;llama3.2|5|0.3" \
+  -e REDIS_HOST=redis \
+  -e LB_ALGORITHM=adaptive \
+  -p 8081:8081 \
+  --name gateway \
+  smart-llm-gateway
+```
+
+**`GATEWAY_MODELS` format**
+
+Semicolon-separated list of models. Each model is pipe-separated fields:
+
+```
+name|replicas|weight[|fallback]
+```
+
+| Field | Required | Description |
+|---|---|---|
+| `name` | yes | Ollama model tag — must match what the node has pulled |
+| `replicas` | yes | Number of Ollama containers running this model |
+| `weight` | yes | Fraction of traffic routed here (all weights should sum to ~1.0) |
+| `fallback` | no | Model to try if all replicas fail |
+
+Examples:
+
+```bash
+# Two models, weighted traffic, fallback chain
+GATEWAY_MODELS="phi3:mini|2|0.7|llama3.2;llama3.2|5|0.3"
+
+# Single model, all traffic
+GATEWAY_MODELS="mistral|3|1.0"
+
+# Three models
+GATEWAY_MODELS="phi3:mini|2|0.5|llama3.2;llama3.2|3|0.3|mistral;mistral|1|0.2"
+```
+
+---
+
+### Full environment variable reference
+
+| Variable | Default | Description |
+|---|---|---|
+| `GATEWAY_MODELS` | — | **Required if no config.yaml.** Model definitions (see format above) |
+| `REDIS_HOST` | `redis` | Redis hostname |
+| `REDIS_PORT` | `6379` | Redis port |
+| `LB_ALGORITHM` | `adaptive` | `round_robin` \| `least_connections` \| `weighted_latency` \| `adaptive` |
+| `MAX_CONCURRENT` | `20` | Max requests in-flight at once |
+| `REQUEST_TIMEOUT` | `30` | Seconds before a request times out (504) |
+| `QUEUE_SIZE` | `100` | Max requests waiting before 503 is returned |
+| `CIRCUIT_FAILURE_THRESHOLD` | `3` | Failures before a node's circuit opens |
+| `CIRCUIT_TIMEOUT` | `30` | Seconds before a half-open retry is allowed |
+| `ADAPTIVE_WEIGHTS` | `true` | Auto-shift traffic away from slow models |
+| `WEIGHT_ADJUST_STEP` | `0.05` | How much to shift weight per healer cycle |
+| `WEIGHT_MIN` | `0.05` | Minimum weight — no model is completely starved |
+| `RECONCILE_INTERVAL` | `20` | Seconds between healer runs |
+| `HEALTH_CHECK_INTERVAL` | `10` | Seconds between passive node probes |
+| `PROMETHEUS_ENABLED` | `true` | Expose `/metrics` for Prometheus scraping |
+| `GATEWAY_PORT` | `8081` | Internal port uvicorn listens on |
+| `LOG_LEVEL` | `info` | `debug` \| `info` \| `warning` \| `error` |
+| `CONFIG_PATH` | `/app/config.yaml` | Path inside the container where config is read from |
+
+---
+
+### Option 3 — Drop into an existing docker-compose
+
+Add the gateway to your existing stack. This assumes you already have Ollama containers running with models pulled.
+
+```yaml
+services:
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks: [app-net]
+
+  gateway:
+    image: smart-llm-gateway        # built locally with: docker build -t smart-llm-gateway .
+    restart: unless-stopped
+    environment:
+      GATEWAY_MODELS: "phi3:mini|2|0.7|llama3.2;llama3.2|2|0.3"
+      REDIS_HOST: redis
+      LB_ALGORITHM: adaptive
+      ADAPTIVE_WEIGHTS: "true"
+      PROMETHEUS_ENABLED: "false"   # disable if you don't need metrics
+    ports:
+      - "8081:8081"
+    depends_on: [redis]
+    networks: [app-net]
+
+networks:
+  app-net:
+```
+
+> **Note:** In this mode, the controller is not running — you must ensure Ollama nodes already have models pulled, and manually seed Redis with `model:<name>` keys pointing to the node addresses, or run the controller separately.
+
+---
+
+### Option 4 — Full self-contained stack (recommended for new deployments)
+
+Use `make up` — it provisions everything automatically including Ollama nodes, model pulls, and the controller.
+
+```bash
+# edit config.yaml → set your models and replica counts
+make up
+```
 
 ---
 
