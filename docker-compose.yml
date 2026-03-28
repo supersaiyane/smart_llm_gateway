@@ -1,0 +1,223 @@
+services:
+  ollama1:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+    - ollama1_data:/root/.ollama
+    networks:
+    - llm-net
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -sf
+      - http://localhost:11434/api/tags
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+  ollama2:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+    - ollama2_data:/root/.ollama
+    networks:
+    - llm-net
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -sf
+      - http://localhost:11434/api/tags
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+  ollama3:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+    - ollama3_data:/root/.ollama
+    networks:
+    - llm-net
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -sf
+      - http://localhost:11434/api/tags
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+  ollama4:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+    - ollama4_data:/root/.ollama
+    networks:
+    - llm-net
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -sf
+      - http://localhost:11434/api/tags
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+  ollama5:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+    - ollama5_data:/root/.ollama
+    networks:
+    - llm-net
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -sf
+      - http://localhost:11434/api/tags
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+  ollama6:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+    - ollama6_data:/root/.ollama
+    networks:
+    - llm-net
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -sf
+      - http://localhost:11434/api/tags
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+  ollama7:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+    - ollama7_data:/root/.ollama
+    networks:
+    - llm-net
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -sf
+      - http://localhost:11434/api/tags
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks:
+    - llm-net
+    healthcheck:
+      test:
+      - CMD
+      - redis-cli
+      - ping
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  controller:
+    build:
+      context: ./controller
+    restart: unless-stopped
+    depends_on:
+    - redis
+    - ollama1
+    - ollama2
+    - ollama3
+    - ollama4
+    - ollama5
+    - ollama6
+    - ollama7
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: '6379'
+      OLLAMA_NODES: ollama1:11434,ollama2:11434,ollama3:11434,ollama4:11434,ollama5:11434,ollama6:11434,ollama7:11434
+      MODEL_REPLICAS: phi3:mini:2,llama3.2:5
+      MAX_PARALLEL_PULLS: '2'
+      PULL_RETRIES: '5'
+      RECONCILE_INTERVAL: '20'
+    volumes:
+    - ./config.yaml:/app/config.yaml:ro
+    - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+    - llm-net
+  gateway:
+    build:
+      context: ./gateway
+    restart: unless-stopped
+    ports:
+    - 8081:8081
+    depends_on:
+    - redis
+    - controller
+    - ollama1
+    - ollama2
+    - ollama3
+    - ollama4
+    - ollama5
+    - ollama6
+    - ollama7
+    environment:
+      CONFIG_PATH: /app/config.yaml
+      REDIS_HOST: redis
+      REDIS_PORT: '6379'
+    volumes:
+    - ./config.yaml:/app/config.yaml:ro
+    networks:
+    - llm-net
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -sf
+      - http://localhost:8081/health
+      interval: 15s
+      timeout: 5s
+      retries: 5
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+    - 8080:80
+    depends_on:
+    - gateway
+    volumes:
+    - ./configs/nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+    - llm-net
+  prometheus:
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    ports:
+    - 9090:9090
+    volumes:
+    - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+    - llm-net
+volumes:
+  ollama1_data: {}
+  ollama2_data: {}
+  ollama3_data: {}
+  ollama4_data: {}
+  ollama5_data: {}
+  ollama6_data: {}
+  ollama7_data: {}
+networks:
+  llm-net:
+    driver: bridge
