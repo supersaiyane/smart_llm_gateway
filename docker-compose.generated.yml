@@ -17,6 +17,10 @@ services:
       - ollama1
       - ollama2
       - ollama3
+      - ollama4
+      - ollama5
+      - ollama6
+      - ollama7
 
     environment:
       REDIS_HOST: redis
@@ -70,6 +74,42 @@ services:
       - ollama_ollama3_data:/root/.ollama
     restart: unless-stopped
 
+  ollama4:
+    image: ollama/ollama
+    container_name: ollama4
+    ports:
+      - "11437:11434"
+    volumes:
+      - ollama_ollama4_data:/root/.ollama
+    restart: unless-stopped
+
+  ollama5:
+    image: ollama/ollama
+    container_name: ollama5
+    ports:
+      - "11438:11434"
+    volumes:
+      - ollama_ollama5_data:/root/.ollama
+    restart: unless-stopped
+
+  ollama6:
+    image: ollama/ollama
+    container_name: ollama6
+    ports:
+      - "11439:11434"
+    volumes:
+      - ollama_ollama6_data:/root/.ollama
+    restart: unless-stopped
+
+  ollama7:
+    image: ollama/ollama
+    container_name: ollama7
+    ports:
+      - "11440:11434"
+    volumes:
+      - ollama_ollama7_data:/root/.ollama
+    restart: unless-stopped
+
 
   # -------------------------
   # Controller (Self-Healing Brain)
@@ -81,6 +121,10 @@ services:
       - ollama1
       - ollama2
       - ollama3
+      - ollama4
+      - ollama5
+      - ollama6
+      - ollama7
 
     volumes:
       - ./init-scripts:/init-scripts
@@ -92,8 +136,8 @@ services:
       /bin/sh /init-scripts/ollama-controller.sh
       "
     environment:
-      MODEL_REPLICAS: '{"phi3:mini": 2, "llama3.2": 1}'
-      OLLAMA_NODES: 'ollama1,ollama2,ollama3'
+      MODEL_REPLICAS: '{"phi3:mini": 2, "llama3.2": 5}'
+      OLLAMA_NODES: 'ollama1,ollama2,ollama3,ollama4,ollama5,ollama6,ollama7'
       STRICT_MODE: 'false'
     restart: always    
 
@@ -101,3 +145,7 @@ volumes:
   ollama_ollama1_data:
   ollama_ollama2_data:
   ollama_ollama3_data:
+  ollama_ollama4_data:
+  ollama_ollama5_data:
+  ollama_ollama6_data:
+  ollama_ollama7_data:
