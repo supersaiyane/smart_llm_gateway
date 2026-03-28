@@ -1,0 +1,17 @@
+# Claude Code local session data
+.claude/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+.venv/
+venv/
+
+# Docker generated files (re-created by make generate)
+docker-compose.yml
+
+# OS
+.DS_Store
+Thumbs.db
